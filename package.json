@@ -15,6 +15,7 @@
     "@genkit-ai/core": "^1.29.0",
     "@genkit-ai/googleai": "^1.28.0",
     "@slack/bolt": "^4.6.0",
-    "dotenv": "^17.3.1"
+    "dotenv": "^17.3.1",
+    "genkit": "^1.29.0"
   }
 }

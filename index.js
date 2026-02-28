@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { App } = require('@slack/bolt');
-const { genkit, z } = require('@genkit-ai/core');
+const { genkit, z } = require('genkit');
 const { googleAI } = require('@genkit-ai/googleai');
 
 // Initialize the Slack Bolt App
@@ -33,7 +33,7 @@ app.event('app_mention', async ({ event, context, client, say }) => {
   try {
     // Extract the text, removing the bot mention at the start
     const textWithoutMention = event.text.replace(/<@.+?>/, '').trim();
-    
+
     // Pass the message to the Genkit flow
     const aiResponse = await chatFlow(textWithoutMention);
 
