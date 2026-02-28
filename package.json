@@ -1,0 +1,20 @@
+{
+  "name": "geminislackapp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@genkit-ai/core": "^1.29.0",
+    "@genkit-ai/googleai": "^1.28.0",
+    "@slack/bolt": "^4.6.0",
+    "dotenv": "^17.3.1"
+  }
+}
