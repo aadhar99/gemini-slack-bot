@@ -12,7 +12,7 @@ const app = new App({
 // Initialize Genkit
 const ai = genkit({
   plugins: [googleAI()],
-  model: 'gemini-3.1-pro', // Configuring it to use gemini-3.1-pro as requested
+  model: 'googleai/gemini-3.1-pro-preview', // Fixed model string
 });
 
 // Create a Genkit flow
@@ -23,7 +23,7 @@ const chatFlow = ai.defineFlow({
 }, async (message) => {
   const { text } = await ai.generate({
     prompt: message,
-    model: 'gemini-3.1-pro'
+    model: 'googleai/gemini-3.1-pro-preview'
   });
   return text;
 });
