@@ -2,6 +2,9 @@ require('dotenv').config();
 const { App } = require('@slack/bolt');
 const { genkit, z } = require('genkit');
 const { googleAI } = require('@genkit-ai/googleai');
+const axios = require('axios');
+const cheerio = require('cheerio');
+const { YoutubeTranscript } = require('youtube-transcript');
 
 // Initialize the Slack Bolt App
 const app = new App({
@@ -15,6 +18,43 @@ const ai = genkit({
   model: 'googleai/gemini-3.1-pro-preview', // Fixed model string
 });
 
+// Create Genkit tools
+const scrapeWebpage = ai.defineTool({
+  name: 'scrapeWebpage',
+  description: 'Fetches the textual content of a webpage given its URL.',
+  inputSchema: z.string(),
+  outputSchema: z.string()
+}, async (url) => {
+  try {
+    const { data } = await axios.get(url);
+    const $ = cheerio.load(data);
+    $('script, style').remove();
+    let text = $('body').text() || $('article').text() || '';
+    // Clean up excessive whitespace
+    text = text.replace(/\s+/g, ' ').trim();
+    return text.substring(0, 15000);
+  } catch (error) {
+    console.error('Error in scrapeWebpage:', error);
+    return `Failed to scrape webpage: ${error.message}`;
+  }
+});
+
+const getYouTubeTranscript = ai.defineTool({
+  name: 'getYouTubeTranscript',
+  description: 'Fetches the transcript of a YouTube video given its URL.',
+  inputSchema: z.string(),
+  outputSchema: z.string()
+}, async (url) => {
+  try {
+    const transcript = await YoutubeTranscript.fetchTranscript(url);
+    const text = transcript.map(t => t.text).join(' ');
+    return text;
+  } catch (error) {
+    console.error('Error in getYouTubeTranscript:', error);
+    return `Failed to fetch transcript: ${error.message}`;
+  }
+});
+
 // Create a Genkit flow
 const chatFlow = ai.defineFlow({
   name: 'chatFlow',
@@ -23,7 +63,9 @@ const chatFlow = ai.defineFlow({
 }, async (message) => {
   const { text } = await ai.generate({
     prompt: message,
-    model: 'googleai/gemini-3.1-pro-preview'
+    model: 'googleai/gemini-3.1-pro-preview',
+    tools: [scrapeWebpage, getYouTubeTranscript],
+    system: 'If the user provides a URL or a YouTube link, you MUST use your tools to fetch the content before summarizing it or answering questions about it.'
   });
   return text;
 });
