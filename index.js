@@ -54,11 +54,36 @@ app.event('app_mention', async ({ event, context, client, say }) => {
     const aiResponse = await chatFlow(textWithoutMention);
 
     // Update UI: Overwrite the placeholder message with final AI response
-    await client.chat.update({
-      channel: event.channel,
-      ts: placeholderTs,
-      text: aiResponse
-    });
+    // Slack has a 4000 character limit per message, so we chunk to be safe.
+    const textLimit = 3000;
+    if (aiResponse.length <= textLimit) {
+      await client.chat.update({
+        channel: event.channel,
+        ts: placeholderTs,
+        text: aiResponse
+      });
+    } else {
+      // Split into safe chunk sizes
+      const chunks = [];
+      for (let i = 0; i < aiResponse.length; i += textLimit) {
+        chunks.push(aiResponse.substring(i, i + textLimit));
+      }
+
+      // Update the placeholder with the first chunk
+      await client.chat.update({
+        channel: event.channel,
+        ts: placeholderTs,
+        text: chunks[0]
+      });
+
+      // Send the rest as sequential replies in that thread
+      for (let i = 1; i < chunks.length; i++) {
+        await say({
+          text: chunks[i],
+          thread_ts: event.ts
+        });
+      }
+    }
 
     // Update Emojis: Remove eyes, add white_check_mark
     await client.reactions.remove({

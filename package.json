@@ -15,7 +15,10 @@
     "@genkit-ai/core": "^1.29.0",
     "@genkit-ai/googleai": "^1.28.0",
     "@slack/bolt": "^4.6.0",
+    "axios": "^1.13.6",
+    "cheerio": "^1.2.0",
     "dotenv": "^17.3.1",
-    "genkit": "^1.29.0"
+    "genkit": "^1.29.0",
+    "youtube-transcript": "^1.2.1"
   }
 }
