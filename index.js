@@ -23,7 +23,7 @@ const scrapeWebpage = ai.defineTool({
   name: 'scrapeWebpage',
   description: 'Fetches the textual content of a webpage given its URL.',
   inputSchema: z.object({ url: z.string() }),
-  outputSchema: z.string()
+  outputSchema: z.object({ text: z.string() })
 }, async ({ url }) => {
   try {
     const { data } = await axios.get(url);
@@ -32,10 +32,10 @@ const scrapeWebpage = ai.defineTool({
     let text = $('body').text() || $('article').text() || '';
     // Clean up excessive whitespace
     text = text.replace(/\s+/g, ' ').trim();
-    return text.substring(0, 15000);
+    return { text: text.substring(0, 15000) };
   } catch (error) {
     console.error('Error in scrapeWebpage:', error);
-    return `Failed to scrape webpage: ${error.message}`;
+    return { text: `Failed to scrape webpage: ${error.message}` };
   }
 });
 
@@ -43,15 +43,15 @@ const getYouTubeTranscript = ai.defineTool({
   name: 'getYouTubeTranscript',
   description: 'Fetches the transcript of a YouTube video given its URL.',
   inputSchema: z.object({ url: z.string() }),
-  outputSchema: z.string()
+  outputSchema: z.object({ text: z.string() })
 }, async ({ url }) => {
   try {
     const transcript = await YoutubeTranscript.fetchTranscript(url);
     const text = transcript.map(t => t.text).join(' ');
-    return text;
+    return { text };
   } catch (error) {
     console.error('Error in getYouTubeTranscript:', error);
-    return `Failed to fetch transcript: ${error.message}`;
+    return { text: `Failed to fetch transcript: ${error.message}` };
   }
 });
 
