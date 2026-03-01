@@ -76,11 +76,17 @@ app.event('app_mention', async ({ event, context, client, say }) => {
 
   try {
     // Initial Acknowledgment: Immediately upon receiving the event
-    await client.reactions.add({
-      channel: event.channel,
-      name: 'eyes',
-      timestamp: event.ts
-    });
+    try {
+      await client.reactions.add({
+        channel: event.channel,
+        name: 'eyes',
+        timestamp: event.ts
+      });
+    } catch (e) {
+      if (e.data && e.data.error !== 'already_reacted') {
+        throw e;
+      }
+    }
 
     // Post Placeholder
     const placeholderMessage = await say({
@@ -128,16 +134,29 @@ app.event('app_mention', async ({ event, context, client, say }) => {
     }
 
     // Update Emojis: Remove eyes, add white_check_mark
-    await client.reactions.remove({
-      channel: event.channel,
-      name: 'eyes',
-      timestamp: event.ts
-    });
-    await client.reactions.add({
-      channel: event.channel,
-      name: 'white_check_mark',
-      timestamp: event.ts
-    });
+    try {
+      await client.reactions.remove({
+        channel: event.channel,
+        name: 'eyes',
+        timestamp: event.ts
+      });
+    } catch (e) {
+      if (e.data && e.data.error !== 'no_reaction') {
+        console.error('Failed to remove eyes emoji:', e);
+      }
+    }
+
+    try {
+      await client.reactions.add({
+        channel: event.channel,
+        name: 'white_check_mark',
+        timestamp: event.ts
+      });
+    } catch (e) {
+      if (e.data && e.data.error !== 'already_reacted') {
+        console.error('Failed to add checkmark emoji:', e);
+      }
+    }
 
   } catch (error) {
     console.error('Error handling app_mention event:', error);
@@ -163,7 +182,9 @@ app.event('app_mention', async ({ event, context, client, say }) => {
         timestamp: event.ts
       });
     } catch (e) {
-      console.error('Failed to remove eyes emoji:', e);
+      if (e.data && e.data.error !== 'no_reaction') {
+        console.error('Failed to remove eyes emoji:', e);
+      }
     }
 
     try {
@@ -174,7 +195,9 @@ app.event('app_mention', async ({ event, context, client, say }) => {
         timestamp: event.ts
       });
     } catch (e) {
-      console.error('Failed to add x emoji:', e);
+      if (e.data && e.data.error !== 'already_reacted') {
+        console.error('Failed to add x emoji:', e);
+      }
     }
   }
 });
@@ -209,11 +232,17 @@ app.event('message', async ({ event, context, client }) => {
 
     // UI State (Processing)
     if (botMessageToUpdate) {
-      await client.reactions.add({
-        channel: event.channel,
-        name: 'eyes',
-        timestamp: event.message.ts
-      });
+      try {
+        await client.reactions.add({
+          channel: event.channel,
+          name: 'eyes',
+          timestamp: event.message.ts
+        });
+      } catch (e) {
+        if (e.data && e.data.error !== 'already_reacted') {
+          console.error('Failed to add eyes emoji:', e);
+        }
+      }
 
       await client.chat.update({
         channel: event.channel,
@@ -221,59 +250,101 @@ app.event('message', async ({ event, context, client }) => {
         text: '🧠 Processing your updated request...'
       });
 
-      // Generate & Final Update: Await Genkit flow with new text
-      const textWithoutMention = editedText.replace(/<@.+?>/g, '').trim();
-      const aiResponse = await chatFlow(textWithoutMention);
+      try {
+        // Generate & Final Update: Await Genkit flow with new text
+        const textWithoutMention = editedText.replace(/<@.+?>/g, '').trim();
+        const aiResponse = await chatFlow(textWithoutMention);
 
-      // Handle Slack's character limit by chunking if necessary
-      const textLimit = 3000;
-      if (aiResponse.length <= textLimit) {
-        await client.chat.update({
-          channel: event.channel,
-          ts: botMessageToUpdate.ts,
-          text: aiResponse
-        });
-      } else {
-        const chunks = [];
-        for (let i = 0; i < aiResponse.length; i += textLimit) {
-          chunks.push(aiResponse.substring(i, i + textLimit));
-        }
-
-        await client.chat.update({
-          channel: event.channel,
-          ts: botMessageToUpdate.ts,
-          text: chunks[0]
-        });
-
-        // Send the rest as sequential replies in that thread
-        for (let i = 1; i < chunks.length; i++) {
-          await client.chat.postMessage({
+        // Handle Slack's character limit by chunking if necessary
+        const textLimit = 3000;
+        if (aiResponse.length <= textLimit) {
+          await client.chat.update({
             channel: event.channel,
-            text: chunks[i],
-            thread_ts: threadTs
+            ts: botMessageToUpdate.ts,
+            text: aiResponse
           });
+        } else {
+          const chunks = [];
+          for (let i = 0; i < aiResponse.length; i += textLimit) {
+            chunks.push(aiResponse.substring(i, i + textLimit));
+          }
+
+          await client.chat.update({
+            channel: event.channel,
+            ts: botMessageToUpdate.ts,
+            text: chunks[0]
+          });
+
+          // Send the rest as sequential replies in that thread
+          for (let i = 1; i < chunks.length; i++) {
+            await client.chat.postMessage({
+              channel: event.channel,
+              text: chunks[i],
+              thread_ts: threadTs
+            });
+          }
         }
-      }
 
-      // Final UI: Remove eyes emoji, add checkmark
-      try {
-        await client.reactions.remove({
-          channel: event.channel,
-          name: 'eyes',
-          timestamp: event.message.ts
-        });
-      } catch (e) {
-        console.error('Failed to remove eyes emoji:', e);
-      }
+        // Final UI: Remove eyes emoji, add checkmark
+        try {
+          await client.reactions.remove({
+            channel: event.channel,
+            name: 'eyes',
+            timestamp: event.message.ts
+          });
+        } catch (e) {
+          if (e.data && e.data.error !== 'no_reaction') {
+            console.error('Failed to remove eyes emoji:', e);
+          }
+        }
 
-      try {
-        await client.reactions.add({
-          channel: event.channel,
-          name: 'white_check_mark',
-          timestamp: event.message.ts
-        });
-      } catch (e) {
-        console.error('Failed to add checkmark emoji:', e);
+        try {
+          await client.reactions.add({
+            channel: event.channel,
+            name: 'white_check_mark',
+            timestamp: event.message.ts
+          });
+        } catch (e) {
+          if (e.data && e.data.error !== 'already_reacted') {
+            console.error('Failed to add checkmark emoji:', e);
+          }
+        }
+      } catch (generationError) {
+        console.error('Error during AI generation for message_changed:', generationError);
+        // Fallback UI update on error
+        try {
+          await client.chat.update({
+            channel: event.channel,
+            ts: botMessageToUpdate.ts,
+            text: '❌ Sorry, I encountered an error processing your update.'
+          });
+        } catch (e) {
+          console.error('Failed to update bot message with error text:', e);
+        }
+
+        try {
+          await client.reactions.remove({
+            channel: event.channel,
+            name: 'eyes',
+            timestamp: event.message.ts
+          });
+        } catch (e) {
+          if (e.data && e.data.error !== 'no_reaction') {
+            console.error('Failed to remove eyes emoji:', e);
+          }
+        }
+
+        try {
+          await client.reactions.add({
+            channel: event.channel,
+            name: 'x',
+            timestamp: event.message.ts
+          });
+        } catch (e) {
+          if (e.data && e.data.error !== 'already_reacted') {
+            console.error('Failed to add x emoji:', e);
+          }
+        }
       }
     }
   } catch (error) {
