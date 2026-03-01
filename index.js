@@ -22,9 +22,9 @@ const ai = genkit({
 const scrapeWebpage = ai.defineTool({
   name: 'scrapeWebpage',
   description: 'Fetches the textual content of a webpage given its URL.',
-  inputSchema: z.string(),
+  inputSchema: z.object({ url: z.string() }),
   outputSchema: z.string()
-}, async (url) => {
+}, async ({ url }) => {
   try {
     const { data } = await axios.get(url);
     const $ = cheerio.load(data);
@@ -42,9 +42,9 @@ const scrapeWebpage = ai.defineTool({
 const getYouTubeTranscript = ai.defineTool({
   name: 'getYouTubeTranscript',
   description: 'Fetches the transcript of a YouTube video given its URL.',
-  inputSchema: z.string(),
+  inputSchema: z.object({ url: z.string() }),
   outputSchema: z.string()
-}, async (url) => {
+}, async ({ url }) => {
   try {
     const transcript = await YoutubeTranscript.fetchTranscript(url);
     const text = transcript.map(t => t.text).join(' ');
@@ -176,6 +176,108 @@ app.event('app_mention', async ({ event, context, client, say }) => {
     } catch (e) {
       console.error('Failed to add x emoji:', e);
     }
+  }
+});
+
+app.event('message', async ({ event, context, client }) => {
+  try {
+    // Filter: Check if event.subtype === 'message_changed' and not bot
+    if (event.subtype !== 'message_changed' || !event.message || event.message.user === context.botUserId) {
+      return;
+    }
+
+    // Mention Check: Check if edited text contains bot ID
+    const editedText = event.message.text || '';
+    if (!editedText.includes(`<@${context.botUserId}>`)) {
+      return;
+    }
+
+    // Locate Previous Answer: Fetch thread replies
+    const threadTs = event.message.thread_ts || event.message.ts;
+    const repliesResult = await client.conversations.replies({
+      channel: event.channel,
+      ts: threadTs
+    });
+
+    let botMessageToUpdate;
+    if (repliesResult.messages) {
+      // Find the first bot message that appears after the edited message chronologically
+      botMessageToUpdate = repliesResult.messages.find(msg =>
+        msg.user === context.botUserId && parseFloat(msg.ts) > parseFloat(event.message.ts)
+      );
+    }
+
+    // UI State (Processing)
+    if (botMessageToUpdate) {
+      await client.reactions.add({
+        channel: event.channel,
+        name: 'eyes',
+        timestamp: event.message.ts
+      });
+
+      await client.chat.update({
+        channel: event.channel,
+        ts: botMessageToUpdate.ts,
+        text: '🧠 Processing your updated request...'
+      });
+
+      // Generate & Final Update: Await Genkit flow with new text
+      const textWithoutMention = editedText.replace(/<@.+?>/g, '').trim();
+      const aiResponse = await chatFlow(textWithoutMention);
+
+      // Handle Slack's character limit by chunking if necessary
+      const textLimit = 3000;
+      if (aiResponse.length <= textLimit) {
+        await client.chat.update({
+          channel: event.channel,
+          ts: botMessageToUpdate.ts,
+          text: aiResponse
+        });
+      } else {
+        const chunks = [];
+        for (let i = 0; i < aiResponse.length; i += textLimit) {
+          chunks.push(aiResponse.substring(i, i + textLimit));
+        }
+
+        await client.chat.update({
+          channel: event.channel,
+          ts: botMessageToUpdate.ts,
+          text: chunks[0]
+        });
+
+        // Send the rest as sequential replies in that thread
+        for (let i = 1; i < chunks.length; i++) {
+          await client.chat.postMessage({
+            channel: event.channel,
+            text: chunks[i],
+            thread_ts: threadTs
+          });
+        }
+      }
+
+      // Final UI: Remove eyes emoji, add checkmark
+      try {
+        await client.reactions.remove({
+          channel: event.channel,
+          name: 'eyes',
+          timestamp: event.message.ts
+        });
+      } catch (e) {
+        console.error('Failed to remove eyes emoji:', e);
+      }
+
+      try {
+        await client.reactions.add({
+          channel: event.channel,
+          name: 'white_check_mark',
+          timestamp: event.message.ts
+        });
+      } catch (e) {
+        console.error('Failed to add checkmark emoji:', e);
+      }
+    }
+  } catch (error) {
+    console.error('Error handling message_changed event:', error);
   }
 });
 
